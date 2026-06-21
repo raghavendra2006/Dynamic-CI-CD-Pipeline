@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: pipeline-demo-app
+
+server:
+  port: 8080
+
+# Actuator Configuration for Kubernetes health probes
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+
+# Application Info
+info:
+  app:
+    name: Pipeline Demo Application
+    description: Sample application for Dynamic CI/CD Pipeline demonstration
+    version: 1.0.0

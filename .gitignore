@@ -1,0 +1,51 @@
+# =============================================================================
+# .gitignore for Dynamic CI/CD Pipeline
+# =============================================================================
+
+# Java / Maven
+sample-app/target/
+*.class
+*.jar
+!sample-app/target/*.jar
+*.war
+*.ear
+*.log
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+*.pid
+
+# Kubernetes
+*.kubeconfig
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Terraform (if any)
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Temporary files
+tmp/
+temp/
+*.tmp

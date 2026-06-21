@@ -1,0 +1,35 @@
+# =============================================================================
+# Kubernetes Namespaces for the Dynamic CI/CD Pipeline
+# Creates isolated namespaces for each component of the pipeline
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jenkins
+  labels:
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+    purpose: ci-cd-orchestration
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devops-tools
+  labels:
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+    purpose: devops-tooling
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+    purpose: staging-environment
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+    purpose: production-environment

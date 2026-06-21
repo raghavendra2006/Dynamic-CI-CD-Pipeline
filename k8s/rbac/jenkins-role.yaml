@@ -1,0 +1,77 @@
+# =============================================================================
+# Jenkins RBAC Role
+# Minimum required permissions for Jenkins to manage dynamic build agents
+# Follows the Principle of Least Privilege - no wildcards used
+# =============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jenkins-pod-manager
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+rules:
+  # Core: Create, manage, and delete dynamic agent pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+  # Required for Jenkins to execute commands in agent pods
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+
+  # Required for Jenkins to stream build logs from agent pods
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  # Required for workspace PVCs in agent pods
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+
+  # Required for mounting secrets/configmaps into agent pods
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # Required for pod status monitoring
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+# =============================================================================
+# ClusterRole for cross-namespace deployments (staging, production)
+# Jenkins needs limited permissions in staging/production namespaces
+# =============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: jenkins-deployer
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+rules:
+  # Deploy applications to staging and production
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+  # Manage services for blue-green switching
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+  # Read pods for deployment verification
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+  # Read namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]

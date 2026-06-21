@@ -1,0 +1,35 @@
+# =============================================================================
+# Production Environment - Application Service
+# This service routes traffic to either Blue or Green deployment
+# The selector "version" label is switched during blue-green deployment
+# 
+# BLUE-GREEN STRATEGY:
+#   - Initial state: selector points to version=blue
+#   - During deployment: new version deployed to idle color (green)
+#   - After validation: selector patched to point to green
+#   - Rollback: selector patched back to blue
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: pipeline-demo-app-service
+  namespace: production
+  labels:
+    app: pipeline-demo-app
+    environment: production
+    app.kubernetes.io/name: pipeline-demo-app
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+  annotations:
+    deployment.kubernetes.io/active-color: "blue"
+    deployment.kubernetes.io/strategy: "blue-green"
+spec:
+  type: NodePort
+  selector:
+    app: pipeline-demo-app
+    version: blue    # <-- This is switched between "blue" and "green"
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30280
+      protocol: TCP

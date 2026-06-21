@@ -1,0 +1,304 @@
+# =============================================================================
+# Jenkins Helm Chart Custom Values
+# Chart: jenkinsci/jenkins
+# 
+# Configures:
+#   - Jenkins controller on port 8086 (user's localhost:8086)
+#   - JCasC for Kubernetes cloud with dynamic agent pod templates
+#   - Required plugins for the CI/CD pipeline
+#   - Persistent storage for Jenkins data
+#   - Resource requests/limits for stable cluster operation
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Controller Configuration
+# ---------------------------------------------------------------------------
+controller:
+  # Jenkins image
+  image:
+    repository: "jenkins/jenkins"
+    tag: "lts-jdk17"
+
+  # Component label
+  componentName: "jenkins-controller"
+
+  # Resource allocation
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  # Service configuration - exposed on port 8086 (user requirement)
+  serviceType: NodePort
+  servicePort: 8086
+  targetPort: 8080
+  nodePort: 30086
+
+  # Agent listener port (JNLP)
+  agentListenerPort: 50000
+  agentListenerServiceType: ClusterIP
+
+  # Jenkins URL (used by agents to connect back)
+  jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8086"
+  jenkinsAdminEmail: "admin@pipeline-demo.local"
+
+  # Number of executors on the controller (0 = all builds run on agents)
+  numExecutors: 0
+
+  # Install plugins required for the pipeline
+  installPlugins:
+    - kubernetes:4253.v7700d91739e5
+    - workflow-aggregator:600.vb_57cdd26fdd7
+    - git:5.2.2
+    - git-client:4.7.0
+    - configuration-as-code:1836.vccda_4a_122a_a_e
+    - job-dsl:1.87
+    - blueocean:1.27.14
+    - docker-workflow:572.v950f58993843
+    - pipeline-stage-view:2.34
+    - credentials-binding:677.vdc9c71ace0e0
+    - sonar:2.17.2
+    - pipeline-utility-steps:2.16.2
+    - timestamper:1.27
+    - ws-cleanup:0.45
+    - lockable-resources:1260.vb_d9cee705ccb_
+    - pipeline-graph-view:264.v2e3b_5e4763b_f
+
+  # Additional plugins (not in default list)
+  additionalPlugins:
+    - antisamy-markup-formatter:162.v0e6ec0571b_67
+    - matrix-auth:3.2.2
+    - role-strategy:727.vd344b_eec783d
+
+  # Jenkins Configuration as Code (JCasC)
+  JCasC:
+    defaultConfig: true
+    configScripts:
+      # ---------------------------------------------------------------
+      # Kubernetes Cloud Configuration with Pod Templates
+      # ---------------------------------------------------------------
+      kubernetes-cloud: |
+        jenkins:
+          clouds:
+            - kubernetes:
+                name: "kubernetes"
+                serverUrl: "https://kubernetes.default.svc.cluster.local"
+                namespace: "jenkins"
+                jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8086"
+                jenkinsTunnel: "jenkins-agent.jenkins.svc.cluster.local:50000"
+                containerCapStr: "10"
+                maxRequestsPerHostStr: "32"
+                retentionTimeout: 5
+                waitForPodSec: 600
+                templates:
+                  # =====================================================
+                  # Pod Template 1: Maven/JDK Agent
+                  # Used for: Build, Unit Tests, Integration Tests,
+                  #           SonarQube Analysis
+                  # =====================================================
+                  - name: "maven-jdk"
+                    label: "maven-jdk"
+                    nodeUsageMode: EXCLUSIVE
+                    serviceAccount: "jenkins"
+                    containers:
+                      - name: "maven"
+                        image: "maven:3.9-eclipse-temurin-17"
+                        command: "/bin/sh -c"
+                        args: "cat"
+                        ttyEnabled: true
+                        workingDir: "/home/jenkins/agent"
+                        resourceRequestCpu: "500m"
+                        resourceRequestMemory: "1Gi"
+                        resourceLimitCpu: "1"
+                        resourceLimitMemory: "2Gi"
+                      - name: "sonar-scanner"
+                        image: "sonarsource/sonar-scanner-cli:5"
+                        command: "/bin/sh -c"
+                        args: "cat"
+                        ttyEnabled: true
+                        workingDir: "/home/jenkins/agent"
+                        resourceRequestCpu: "200m"
+                        resourceRequestMemory: "512Mi"
+                        resourceLimitCpu: "500m"
+                        resourceLimitMemory: "1Gi"
+                    volumes:
+                      - hostPathVolume:
+                          mountPath: "/root/.m2/repository"
+                          hostPath: "/tmp/maven-cache"
+                    idleMinutes: 0
+                    activeDeadlineSeconds: 3600
+                    slaveConnectTimeout: 300
+
+                  # =====================================================
+                  # Pod Template 2: Docker Agent
+                  # Used for: Docker image build, Trivy scanning,
+                  #           Image push to registry
+                  # =====================================================
+                  - name: "docker-agent"
+                    label: "docker-agent"
+                    nodeUsageMode: EXCLUSIVE
+                    serviceAccount: "jenkins"
+                    containers:
+                      - name: "docker"
+                        image: "docker:24-dind"
+                        command: "/bin/sh -c"
+                        args: "cat"
+                        ttyEnabled: true
+                        privileged: true
+                        workingDir: "/home/jenkins/agent"
+                        resourceRequestCpu: "500m"
+                        resourceRequestMemory: "512Mi"
+                        resourceLimitCpu: "1"
+                        resourceLimitMemory: "2Gi"
+                        envVars:
+                          - envVar:
+                              key: "DOCKER_TLS_CERTDIR"
+                              value: ""
+                      - name: "trivy"
+                        image: "aquasec/trivy:0.50.0"
+                        command: "/bin/sh -c"
+                        args: "cat"
+                        ttyEnabled: true
+                        workingDir: "/home/jenkins/agent"
+                        resourceRequestCpu: "200m"
+                        resourceRequestMemory: "256Mi"
+                        resourceLimitCpu: "500m"
+                        resourceLimitMemory: "1Gi"
+                    volumes:
+                      - hostPathVolume:
+                          mountPath: "/var/run/docker.sock"
+                          hostPath: "/var/run/docker.sock"
+                    idleMinutes: 0
+                    activeDeadlineSeconds: 1800
+                    slaveConnectTimeout: 300
+
+                  # =====================================================
+                  # Pod Template 3: Kubectl Agent
+                  # Used for: Deploying to staging and production,
+                  #           Blue-green switching
+                  # =====================================================
+                  - name: "kubectl-agent"
+                    label: "kubectl-agent"
+                    nodeUsageMode: EXCLUSIVE
+                    serviceAccount: "jenkins"
+                    containers:
+                      - name: "kubectl"
+                        image: "bitnami/kubectl:1.29"
+                        command: "/bin/sh -c"
+                        args: "cat"
+                        ttyEnabled: true
+                        workingDir: "/home/jenkins/agent"
+                        resourceRequestCpu: "100m"
+                        resourceRequestMemory: "128Mi"
+                        resourceLimitCpu: "250m"
+                        resourceLimitMemory: "256Mi"
+                    idleMinutes: 0
+                    activeDeadlineSeconds: 600
+                    slaveConnectTimeout: 300
+
+      # ---------------------------------------------------------------
+      # Security Configuration
+      # ---------------------------------------------------------------
+      security-config: |
+        jenkins:
+          securityRealm:
+            local:
+              allowsSignup: false
+              users:
+                - id: "admin"
+                  password: "${JENKINS_ADMIN_PASSWORD:-admin}"
+          authorizationStrategy:
+            roleBased:
+              roles:
+                global:
+                  - name: "admin"
+                    permissions:
+                      - "Overall/Administer"
+                    entries:
+                      - user: "admin"
+                  - name: "readonly"
+                    permissions:
+                      - "Overall/Read"
+                      - "Job/Read"
+
+      # ---------------------------------------------------------------
+      # SonarQube Server Configuration
+      # ---------------------------------------------------------------
+      sonarqube-config: |
+        unclassified:
+          sonarGlobalConfiguration:
+            buildWrapperEnabled: true
+            installations:
+              - name: "SonarQube"
+                serverUrl: "http://localhost:9000"
+                credentialsId: "sonarqube-token"
+                triggers:
+                  skipScmCause: false
+                  skipUpstreamCause: false
+
+  # Kubernetes liveness/readiness probes
+  healthProbes: true
+  probes:
+    startupProbe:
+      httpGet:
+        path: '/login'
+        port: http
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 12
+    livenessProbe:
+      httpGet:
+        path: '/login'
+        port: http
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 5
+    readinessProbe:
+      httpGet:
+        path: '/login'
+        port: http
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+# ---------------------------------------------------------------------------
+# Persistence Configuration
+# ---------------------------------------------------------------------------
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: "ReadWriteOnce"
+  size: "20Gi"
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Agent Configuration (base settings)
+# ---------------------------------------------------------------------------
+agent:
+  enabled: true
+  defaultsProviderTemplate: ""
+  jenkinsUrl: ""
+  jenkinsTunnel: ""
+  kubernetesConnectTimeout: 5
+  kubernetesReadTimeout: 15
+  maxRequestsPerHostStr: "32"
+  retentionTimeout: 5
+  waitForPodSec: 600
+
+# ---------------------------------------------------------------------------
+# Service Account
+# ---------------------------------------------------------------------------
+serviceAccount:
+  create: false
+  name: "jenkins"
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# RBAC
+# ---------------------------------------------------------------------------
+rbac:
+  create: false
+  readSecrets: true

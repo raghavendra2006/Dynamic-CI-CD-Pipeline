@@ -1,0 +1,13 @@
+# Docker
+target/
+!target/pipeline-demo-app.jar
+.git
+.gitignore
+*.md
+*.txt
+Jenkinsfile
+k8s/
+helm/
+scripts/
+.idea/
+*.iml

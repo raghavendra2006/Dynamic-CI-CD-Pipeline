@@ -1,0 +1,14 @@
+# =============================================================================
+# Jenkins Service Account
+# Dedicated service account for Jenkins master and dynamic agent provisioning
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+automountServiceAccountToken: true

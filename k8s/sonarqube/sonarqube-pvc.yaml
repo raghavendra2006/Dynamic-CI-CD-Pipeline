@@ -1,0 +1,33 @@
+# =============================================================================
+# SonarQube PersistentVolumeClaim
+# Persistent storage for SonarQube data and configuration
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-data-pvc
+  namespace: devops-tools
+  labels:
+    app.kubernetes.io/name: sonarqube
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarqube-extensions-pvc
+  namespace: devops-tools
+  labels:
+    app.kubernetes.io/name: sonarqube
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

@@ -1,0 +1,62 @@
+# =============================================================================
+# Trivy Configuration
+# ConfigMap for Trivy vulnerability scanner settings
+# Used by the Jenkins pipeline for container image scanning
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trivy-config
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/name: trivy
+    app.kubernetes.io/component: security-scanner
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+data:
+  # Trivy scanning policy configuration
+  trivy-policy.yaml: |
+    # Severity levels to scan for
+    severity:
+      - CRITICAL
+      - HIGH
+      - MEDIUM
+
+    # Exit code configuration
+    # exit-code 1 = fail on CRITICAL vulnerabilities
+    exit-code-on-critical: "1"
+    exit-code-on-high: "0"
+
+    # Output format
+    format: "table"
+
+    # Additional scan settings
+    ignore-unfixed: true
+    skip-dirs:
+      - /usr/local/lib/python
+      - /usr/lib/python
+
+  # Template for HTML report generation
+  trivy-html-template.tpl: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Trivy Vulnerability Report</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #333; }
+            table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #4CAF50; color: white; }
+            tr:nth-child(even) { background-color: #f2f2f2; }
+            .critical { color: #d32f2f; font-weight: bold; }
+            .high { color: #f57c00; font-weight: bold; }
+            .medium { color: #fbc02d; }
+            .low { color: #388e3c; }
+        </style>
+    </head>
+    <body>
+        <h1>🔒 Trivy Security Scan Report</h1>
+        <p>Scan Date: {{ now }}</p>
+        <p>Image: {{ .Target }}</p>
+    </body>
+    </html>

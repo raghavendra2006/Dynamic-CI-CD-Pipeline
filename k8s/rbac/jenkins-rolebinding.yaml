@@ -1,0 +1,39 @@
+# =============================================================================
+# Jenkins RBAC RoleBinding and ClusterRoleBinding
+# Binds the minimum-privilege roles to the Jenkins service account
+# =============================================================================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-pod-manager-binding
+  namespace: jenkins
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: jenkins
+    namespace: jenkins
+roleRef:
+  kind: Role
+  name: jenkins-pod-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRoleBinding for cross-namespace deployment capabilities
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: jenkins-deployer-binding
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: jenkins
+    namespace: jenkins
+roleRef:
+  kind: ClusterRole
+  name: jenkins-deployer
+  apiGroup: rbac.authorization.k8s.io

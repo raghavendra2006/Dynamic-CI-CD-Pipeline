@@ -1,0 +1,25 @@
+# =============================================================================
+# Staging Environment - Application Service
+# Exposes the staging application via NodePort
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: pipeline-demo-app-service
+  namespace: staging
+  labels:
+    app: pipeline-demo-app
+    environment: staging
+    app.kubernetes.io/name: pipeline-demo-app
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+spec:
+  type: NodePort
+  selector:
+    app: pipeline-demo-app
+    environment: staging
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30180
+      protocol: TCP

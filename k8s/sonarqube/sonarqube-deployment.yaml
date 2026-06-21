@@ -1,0 +1,93 @@
+# =============================================================================
+# SonarQube Deployment
+# Static code analysis server for quality gates
+# Note: User's SonarQube is on localhost:9000
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sonarqube
+  namespace: devops-tools
+  labels:
+    app.kubernetes.io/name: sonarqube
+    app.kubernetes.io/component: code-quality
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarqube
+  template:
+    metadata:
+      labels:
+        app: sonarqube
+        app.kubernetes.io/name: sonarqube
+    spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        # SonarQube requires increased vm.max_map_count
+        - name: init-sysctl
+          image: busybox:1.36
+          command: ["sysctl", "-w", "vm.max_map_count=524288"]
+          securityContext:
+            privileged: true
+        # Fix volume permissions
+        - name: init-permissions
+          image: busybox:1.36
+          command: ["sh", "-c", "chown -R 1000:1000 /opt/sonarqube/data /opt/sonarqube/extensions"]
+          volumeMounts:
+            - name: sonarqube-data
+              mountPath: /opt/sonarqube/data
+            - name: sonarqube-extensions
+              mountPath: /opt/sonarqube/extensions
+      containers:
+        - name: sonarqube
+          image: sonarqube:10-community
+          ports:
+            - containerPort: 9000
+              name: http
+              protocol: TCP
+          env:
+            - name: SONAR_JDBC_URL
+              value: ""
+            - name: SONAR_JDBC_USERNAME
+              value: ""
+            - name: SONAR_JDBC_PASSWORD
+              value: ""
+            # Use embedded H2 database for simplicity
+            - name: SONAR_SEARCH_JAVAADDITIONALOPTS
+              value: "-Dnode.store.allow_mmap=false"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: 2
+              memory: 4Gi
+          volumeMounts:
+            - name: sonarqube-data
+              mountPath: /opt/sonarqube/data
+            - name: sonarqube-extensions
+              mountPath: /opt/sonarqube/extensions
+          livenessProbe:
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /api/system/status
+              port: 9000
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            failureThreshold: 5
+      volumes:
+        - name: sonarqube-data
+          persistentVolumeClaim:
+            claimName: sonarqube-data-pvc
+        - name: sonarqube-extensions
+          persistentVolumeClaim:
+            claimName: sonarqube-extensions-pvc

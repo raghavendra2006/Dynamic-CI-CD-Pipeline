@@ -1,0 +1,18 @@
+# =============================================================================
+# Nexus PersistentVolumeClaim
+# Persistent storage for Nexus artifact repository data
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nexus-data-pvc
+  namespace: devops-tools
+  labels:
+    app.kubernetes.io/name: nexus
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi

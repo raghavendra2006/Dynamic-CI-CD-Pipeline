@@ -1,0 +1,67 @@
+# =============================================================================
+# Nexus Repository Manager Deployment
+# Artifact repository for storing Docker images and Maven artifacts
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus
+  namespace: devops-tools
+  labels:
+    app.kubernetes.io/name: nexus
+    app.kubernetes.io/component: artifact-repository
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus
+  template:
+    metadata:
+      labels:
+        app: nexus
+        app.kubernetes.io/name: nexus
+    spec:
+      securityContext:
+        fsGroup: 200
+      containers:
+        - name: nexus
+          image: sonatype/nexus3:3.68.0
+          ports:
+            - containerPort: 8081
+              name: http
+              protocol: TCP
+            - containerPort: 8082
+              name: docker-registry
+              protocol: TCP
+          env:
+            - name: INSTALL4J_ADD_VM_PARAMS
+              value: "-Xms1g -Xmx2g -XX:MaxDirectMemorySize=2g -Djava.util.prefs.userRoot=/nexus-data/javaprefs"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: 2
+              memory: 4Gi
+          volumeMounts:
+            - name: nexus-data
+              mountPath: /nexus-data
+          livenessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: 8081
+            initialDelaySeconds: 180
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /service/rest/v1/status
+              port: 8081
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            failureThreshold: 5
+      volumes:
+        - name: nexus-data
+          persistentVolumeClaim:
+            claimName: nexus-data-pvc
