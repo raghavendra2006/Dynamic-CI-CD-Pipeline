@@ -29,6 +29,10 @@ An enterprise-grade CI/CD pipeline built with Jenkins running on Kubernetes, fea
 
 ## 🏗️ Architecture Overview
 
+![CI/CD Pipeline Architecture Diagram](docs/architecture-diagram.png)
+
+### Detailed Component Layout
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        KUBERNETES CLUSTER                               │
