@@ -125,9 +125,9 @@ controller:
                         resourceLimitCpu: "500m"
                         resourceLimitMemory: "1Gi"
                     volumes:
-                      - hostPathVolume:
-                          mountPath: "/root/.m2/repository"
-                          hostPath: "/tmp/maven-cache"
+                      - emptyDirVolume:
+                          mountPath: "/home/jenkins/agent/.m2/repository"
+                          memory: false
                     idleMinutes: 0
                     activeDeadlineSeconds: 3600
                     slaveConnectTimeout: 300
@@ -168,9 +168,15 @@ controller:
                         resourceLimitCpu: "500m"
                         resourceLimitMemory: "1Gi"
                     volumes:
-                      - hostPathVolume:
-                          mountPath: "/var/run/docker.sock"
-                          hostPath: "/var/run/docker.sock"
+                      - emptyDirVolume:
+                          mountPath: "/var/run"
+                          memory: false
+                      - emptyDirVolume:
+                          mountPath: "/var/lib/docker"
+                          memory: false
+                      - configMapVolume:
+                          configMapName: "trivy-config"
+                          mountPath: "/etc/trivy"
                     idleMinutes: 0
                     activeDeadlineSeconds: 1800
                     slaveConnectTimeout: 300
@@ -233,7 +239,7 @@ controller:
             buildWrapperEnabled: true
             installations:
               - name: "SonarQube"
-                serverUrl: "http://localhost:9000"
+                serverUrl: "http://sonarqube-service.devops-tools.svc.cluster.local:9000"
                 credentialsId: "sonarqube-token"
                 triggers:
                   skipScmCause: false

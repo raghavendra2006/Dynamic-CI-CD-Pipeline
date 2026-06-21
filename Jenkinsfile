@@ -34,14 +34,14 @@ pipeline {
         APP_VERSION       = '1.0.0'
 
         // Docker / Registry configuration
-        DOCKER_REGISTRY   = 'localhost:30082'
+        DOCKER_REGISTRY   = 'nexus-service.devops-tools.svc.cluster.local:8082'
         IMAGE_NAME        = "${DOCKER_REGISTRY}/${APP_NAME}"
         IMAGE_TAG         = "${APP_VERSION}-${BUILD_NUMBER}"
         IMAGE_FULL        = "${IMAGE_NAME}:${IMAGE_TAG}"
         IMAGE_LATEST      = "${IMAGE_NAME}:latest"
 
-        // SonarQube configuration (user's localhost:9000)
-        SONAR_HOST_URL    = 'http://localhost:9000'
+        // SonarQube configuration (in-cluster DNS)
+        SONAR_HOST_URL    = 'http://sonarqube-service.devops-tools.svc.cluster.local:9000'
         SONAR_PROJECT_KEY = 'pipeline-demo-app'
 
         // Kubernetes namespaces
@@ -108,80 +108,64 @@ pipeline {
         }
 
         // =====================================================================
-        // Stage 2: Build Application
+        // Stage 2: Build & Test Application
         // =====================================================================
-        stage('Build') {
+        stage('Build & Test') {
             steps {
-                echo '🏗️ Building application with Maven...'
+                echo '🧪 Compiling, testing and packaging application with Maven...'
                 container('maven') {
                     dir('sample-app') {
                         sh '''
-                            mvn clean compile -B -DskipTests \
+                            mvn clean verify -B \
                                 -Dmaven.repo.local=/home/jenkins/agent/.m2/repository
                         '''
                     }
                 }
             }
+            post {
+                always {
+                    // Publish test results
+                    junit allowEmptyResults: true,
+                          testResults: 'sample-app/target/surefire-reports/*.xml'
+
+                    // Publish JaCoCo coverage report
+                    jacoco(
+                        execPattern: 'sample-app/target/jacoco.exec',
+                        classPattern: 'sample-app/target/classes',
+                        sourcePattern: 'sample-app/src/main/java',
+                        exclusionPattern: 'sample-app/src/test*'
+                    )
+
+                    // Archive the JAR artifact
+                    archiveArtifacts artifacts: 'sample-app/target/*.jar',
+                                     fingerprint: true
+                }
+                success {
+                    // Stash the jar file for the Docker build stage
+                    stash name: 'app-jar', includes: 'sample-app/target/*.jar'
+                }
+            }
         }
 
         // =====================================================================
-        // Stage 3: Parallel - Unit Tests & SonarQube Analysis
+        // Stage 3: SonarQube Code Quality Analysis
         // =====================================================================
-        stage('Test & Analysis') {
-            parallel {
-                // ---------------------------------------------------------
-                // Stage 3a: Unit & Integration Tests
-                // ---------------------------------------------------------
-                stage('Unit & Integration Tests') {
-                    steps {
-                        echo '🧪 Running unit and integration tests...'
-                        container('maven') {
-                            dir('sample-app') {
-                                sh '''
-                                    mvn test verify -B \
-                                        -Dmaven.repo.local=/home/jenkins/agent/.m2/repository
-                                '''
-                            }
-                        }
-                    }
-                    post {
-                        always {
-                            // Publish test results
-                            junit allowEmptyResults: true,
-                                  testResults: 'sample-app/target/surefire-reports/*.xml'
-
-                            // Publish JaCoCo coverage report
-                            jacoco(
-                                execPattern: 'sample-app/target/jacoco.exec',
-                                classPattern: 'sample-app/target/classes',
-                                sourcePattern: 'sample-app/src/main/java',
-                                exclusionPattern: 'sample-app/src/test*'
-                            )
-                        }
-                    }
-                }
-
-                // ---------------------------------------------------------
-                // Stage 3b: SonarQube Code Quality Analysis
-                // ---------------------------------------------------------
-                stage('SonarQube Analysis') {
-                    steps {
-                        echo '🔍 Running SonarQube static code analysis...'
-                        container('maven') {
-                            dir('sample-app') {
-                                withSonarQubeEnv('SonarQube') {
-                                    sh '''
-                                        mvn sonar:sonar -B \
-                                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                                            -Dsonar.projectName="Pipeline Demo Application" \
-                                            -Dsonar.host.url=${SONAR_HOST_URL} \
-                                            -Dsonar.login=${SONAR_TOKEN} \
-                                            -Dsonar.java.coveragePlugin=jacoco \
-                                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
-                                            -Dmaven.repo.local=/home/jenkins/agent/.m2/repository
-                                    '''
-                                }
-                            }
+        stage('SonarQube Analysis') {
+            steps {
+                echo '🔍 Running SonarQube static code analysis...'
+                container('maven') {
+                    dir('sample-app') {
+                        withSonarQubeEnv('SonarQube') {
+                            sh '''
+                                mvn sonar:sonar -B \
+                                    -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                    -Dsonar.projectName="Pipeline Demo Application" \
+                                    -Dsonar.host.url=${SONAR_HOST_URL} \
+                                    -Dsonar.login=${SONAR_TOKEN} \
+                                    -Dsonar.java.coveragePlugin=jacoco \
+                                    -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+                                    -Dmaven.repo.local=/home/jenkins/agent/.m2/repository
+                            '''
                         }
                     }
                 }
@@ -203,27 +187,7 @@ pipeline {
         }
 
         // =====================================================================
-        // Stage 5: Package Application
-        // =====================================================================
-        stage('Package') {
-            steps {
-                echo '📦 Packaging application JAR...'
-                container('maven') {
-                    dir('sample-app') {
-                        sh '''
-                            mvn package -B -DskipTests \
-                                -Dmaven.repo.local=/home/jenkins/agent/.m2/repository
-                        '''
-                    }
-                }
-                // Archive the JAR artifact
-                archiveArtifacts artifacts: 'sample-app/target/*.jar',
-                                 fingerprint: true
-            }
-        }
-
-        // =====================================================================
-        // Stage 6: Docker Image Build & Push
+        // Stage 5: Docker Image Build & Push
         // Uses the docker-agent pod template
         // =====================================================================
         stage('Image Build & Push') {
@@ -236,17 +200,17 @@ pipeline {
             steps {
                 echo "🐳 Building Docker image: ${IMAGE_FULL}"
                 checkout scm
+                // Unstash at the workspace root so the path is sample-app/target/pipeline-demo-app.jar
+                unstash 'app-jar'
                 container('docker') {
                     dir('sample-app') {
-                        // Start Docker daemon in background
-                        sh 'dockerd &'
-                        sh 'sleep 5'
+                        // Start Docker daemon in background with insecure registry configuration
+                        sh 'dockerd --insecure-registry nexus-service.devops-tools.svc.cluster.local:8082 &'
+                        sh 'echo "Waiting for Docker daemon to start..." && for i in \$(seq 1 30); do docker info >/dev/null 2>&1 && break || sleep 1; done'
 
-                        // Build the Docker image with versioned tags
+                        // Build the Docker image copying the pre-built JAR from the workspace
                         sh """
                             docker build \
-                                --build-arg APP_VERSION=${APP_VERSION} \
-                                --build-arg BUILD_NUMBER=${BUILD_NUMBER} \
                                 -t ${IMAGE_FULL} \
                                 -t ${IMAGE_LATEST} \
                                 -t ${IMAGE_NAME}:${GIT_COMMIT_SHORT} \
@@ -293,6 +257,17 @@ pipeline {
                             ${IMAGE_FULL} || true
                     """
 
+                    // Generate HTML report using custom template from ConfigMap
+                    sh """
+                        trivy image \
+                            --severity CRITICAL,HIGH \
+                            --no-progress \
+                            --format template \
+                            --template "@/etc/trivy/trivy-html-template.tpl" \
+                            --output trivy-report.html \
+                            ${IMAGE_FULL} || true
+                    """
+
                     // Generate JSON report for archiving
                     sh """
                         trivy image \
@@ -313,8 +288,8 @@ pipeline {
                             ${IMAGE_FULL}
                     """
                 }
-                // Archive the vulnerability report
-                archiveArtifacts artifacts: 'trivy-report.json',
+                // Archive the vulnerability reports (both JSON and HTML)
+                archiveArtifacts artifacts: 'trivy-report.json,trivy-report.html',
                                  allowEmptyArchive: true
                 echo '✅ Security scan PASSED - No CRITICAL vulnerabilities found!'
             }
@@ -359,25 +334,21 @@ pipeline {
                         """
 
                         // Run smoke test against staging
-                        script {
-                            def stagingUrl = sh(
-                                script: "kubectl get svc pipeline-demo-app-service -n ${STAGING_NS} -o jsonpath='{.spec.clusterIP}'",
-                                returnStdout: true
-                            ).trim()
-                            sh """
-                                echo "Running smoke test against staging..."
-                                for i in 1 2 3 4 5; do
-                                    if wget -q -O - http://${stagingUrl}:8080/api/health 2>/dev/null | grep -q 'UP'; then
-                                        echo "✅ Smoke test passed on attempt \$i"
-                                        exit 0
-                                    fi
-                                    echo "Attempt \$i failed, retrying in 10s..."
-                                    sleep 10
-                                done
-                                echo "❌ Smoke test failed after 5 attempts"
-                                exit 1
-                            """
-                        }
+                          script {
+                              sh """
+                                  echo "Running smoke test against staging..."
+                                  for i in 1 2 3 4 5; do
+                                      if kubectl exec -n ${STAGING_NS} deployment/pipeline-demo-app -- wget -q -O - http://localhost:8080/api/health 2>/dev/null | grep -q 'UP'; then
+                                          echo "✅ Smoke test passed on attempt \$i"
+                                          exit 0
+                                      fi
+                                      echo "Attempt \$i failed, retrying in 10s..."
+                                      sleep 10
+                                  done
+                                  echo "❌ Smoke test failed after 5 attempts"
+                                  exit 1
+                              """
+                          }
                     }
                 }
                 echo '✅ Staging deployment successful!'
@@ -471,20 +442,11 @@ pipeline {
                                     --timeout=300s
                             """
 
-                            // Step 5: Run smoke tests against the idle deployment
-                            def targetPodIP = sh(
-                                script: """
-                                    kubectl get pods -n ${PRODUCTION_NS} \
-                                        -l app=pipeline-demo-app,version=${targetColor} \
-                                        -o jsonpath='{.items[0].status.podIP}'
-                                """,
-                                returnStdout: true
-                            ).trim()
-
+                            // Step 5: Run smoke tests against the idle deployment via container execution
                             sh """
                                 echo "Running smoke tests against ${targetColor} deployment..."
                                 for i in 1 2 3 4 5; do
-                                    if wget -q -O - http://${targetPodIP}:8080/api/health 2>/dev/null | grep -q 'UP'; then
+                                    if kubectl exec -n ${PRODUCTION_NS} deployment/${targetDeployment} -- wget -q -O - http://localhost:8080/api/health 2>/dev/null | grep -q 'UP'; then
                                         echo "✅ ${targetColor} smoke test passed on attempt \$i"
                                         break
                                     fi

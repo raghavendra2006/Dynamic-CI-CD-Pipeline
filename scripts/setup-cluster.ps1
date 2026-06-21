@@ -77,7 +77,13 @@ function Install-SonarQube {
     kubectl apply -f "$ProjectDir\k8s\sonarqube\sonarqube-pvc.yaml"
     kubectl apply -f "$ProjectDir\k8s\sonarqube\sonarqube-deployment.yaml"
     kubectl apply -f "$ProjectDir\k8s\sonarqube\sonarqube-service.yaml"
-    Write-Info "Waiting for SonarQube to be ready..."
+    Write-Info "Waiting for SonarQube to be ready (this may take 2-3 minutes)..."
+    try {
+        kubectl rollout status deployment/sonarqube -n $DevopsNamespace --timeout=300s
+    }
+    catch {
+        Write-Warn "SonarQube rollout did not complete in time. Check status: kubectl get pods -n $DevopsNamespace"
+    }
     Write-Success "SonarQube deployed (NodePort 30900)"
 }
 
@@ -87,7 +93,13 @@ function Install-Nexus {
     kubectl apply -f "$ProjectDir\k8s\nexus\nexus-pvc.yaml"
     kubectl apply -f "$ProjectDir\k8s\nexus\nexus-deployment.yaml"
     kubectl apply -f "$ProjectDir\k8s\nexus\nexus-service.yaml"
-    Write-Info "Waiting for Nexus to be ready..."
+    Write-Info "Waiting for Nexus to be ready (this may take 3-5 minutes)..."
+    try {
+        kubectl rollout status deployment/nexus -n $DevopsNamespace --timeout=600s
+    }
+    catch {
+        Write-Warn "Nexus rollout did not complete in time. Check status: kubectl get pods -n $DevopsNamespace"
+    }
     Write-Success "Nexus deployed (Web: NodePort 30081, Docker: NodePort 30082)"
 }
 

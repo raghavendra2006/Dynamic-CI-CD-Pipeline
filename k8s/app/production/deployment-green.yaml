@@ -35,7 +35,7 @@ spec:
     spec:
       containers:
         - name: pipeline-demo-app
-          image: localhost:30082/pipeline-demo-app:latest
+          image: nexus-service.devops-tools.svc.cluster.local:8082/pipeline-demo-app:latest
           ports:
             - containerPort: 8080
               name: http

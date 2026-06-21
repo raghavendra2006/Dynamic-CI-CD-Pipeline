@@ -110,8 +110,8 @@ deploy_sonarqube() {
     kubectl apply -f "${PROJECT_DIR}/k8s/sonarqube/sonarqube-service.yaml"
 
     log_info "Waiting for SonarQube to be ready (this may take 2-3 minutes)..."
-    kubectl wait --for=condition=ready pod -l app=sonarqube -n ${DEVOPS_NAMESPACE} --timeout=300s 2>/dev/null || \
-        log_warn "SonarQube may still be starting. Check: kubectl get pods -n ${DEVOPS_NAMESPACE}"
+    kubectl rollout status deployment/sonarqube -n ${DEVOPS_NAMESPACE} --timeout=300s || \
+        log_warn "SonarQube rollout did not complete in time. Check: kubectl get pods -n ${DEVOPS_NAMESPACE}"
 
     log_success "SonarQube deployed (accessible at NodePort 30900)"
 }
@@ -125,8 +125,8 @@ deploy_nexus() {
     kubectl apply -f "${PROJECT_DIR}/k8s/nexus/nexus-service.yaml"
 
     log_info "Waiting for Nexus to be ready (this may take 3-5 minutes)..."
-    kubectl wait --for=condition=ready pod -l app=nexus -n ${DEVOPS_NAMESPACE} --timeout=600s 2>/dev/null || \
-        log_warn "Nexus may still be starting. Check: kubectl get pods -n ${DEVOPS_NAMESPACE}"
+    kubectl rollout status deployment/nexus -n ${DEVOPS_NAMESPACE} --timeout=600s || \
+        log_warn "Nexus rollout did not complete in time. Check: kubectl get pods -n ${DEVOPS_NAMESPACE}"
 
     log_success "Nexus deployed (Web UI: NodePort 30081, Docker Registry: NodePort 30082)"
     log_info "Default Nexus admin password: kubectl exec -n ${DEVOPS_NAMESPACE} \$(kubectl get pod -l app=nexus -n ${DEVOPS_NAMESPACE} -o jsonpath='{.items[0].metadata.name}') -- cat /nexus-data/admin.password"
