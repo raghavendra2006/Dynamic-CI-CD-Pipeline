@@ -77,35 +77,29 @@ graph TB
 ```mermaid
 flowchart TD
     A[🔄 Git Push to main] -->|Webhook| B[📋 Checkout Source Code]
-    B --> C[🏗️ Build with Maven<br/>maven-jdk agent]
-    C --> D{Parallel Execution}
+    B --> C[🏗️ Build & Test<br/>maven-jdk agent<br/>mvn clean verify<br/>JUnit 5 + JaCoCo + JAR]
     
-    D --> E[🧪 Unit & Integration Tests<br/>JUnit 5 + JaCoCo Coverage]
-    D --> F[🔍 SonarQube Analysis<br/>localhost:9000]
+    C --> F[🔍 SonarQube Analysis<br/>Sequential: uses coverage data]
     
-    E --> G[🚦 Quality Gate Check]
-    F --> G
+    F --> G[🚦 Quality Gate Check]
     
-    G -->|PASS| H[📦 Package JAR Artifact]
+    G -->|PASS| I[🐳 Docker Image Build & Push<br/>docker-agent — unstash JAR<br/>→ Nexus Registry]
     G -->|FAIL| X[❌ Pipeline Failed<br/>Quality Gate Not Met]
     
-    H --> I[🐳 Docker Image Build & Push<br/>docker-agent → Nexus:8082]
+    I --> J[🔒 Trivy Security Scan<br/>CRITICAL CVE Check<br/>HTML + JSON Reports]
     
-    I --> J[🔒 Trivy Security Scan<br/>CRITICAL CVE Check]
-    
-    J -->|No Critical CVEs| K[🚀 Deploy to Staging<br/>kubectl-agent → staging ns]
+    J -->|No Critical CVEs| K[🚀 Deploy to Staging<br/>kubectl-agent → staging ns<br/>kubectl exec smoke test]
     J -->|Critical CVEs Found| Y[❌ Pipeline Failed<br/>Security Vulnerabilities]
     
     K --> L[⏸️ Manual Approval<br/>30-minute timeout]
     
-    L -->|Approved| M[🔵🟢 Blue-Green Deploy<br/>kubectl-agent → production ns]
+    L -->|Approved| M[🔵🟢 Blue-Green Deploy<br/>kubectl-agent → production ns<br/>kubectl exec smoke test]
     L -->|Rejected/Timeout| Z[⏹️ Pipeline Stopped]
     
     M --> N[✅ Pipeline Complete!]
 
     style A fill:#FF9800,stroke:#333,color:#fff
     style C fill:#6DB33F,stroke:#333,color:#fff
-    style E fill:#9C27B0,stroke:#333,color:#fff
     style F fill:#4E9BCD,stroke:#333,color:#fff
     style G fill:#FFC107,stroke:#333,color:#000
     style I fill:#2496ED,stroke:#333,color:#fff

@@ -107,16 +107,19 @@ External:
                          │
                          ▼
                 ┌─────────────────┐
-                │  2. Build       │  [maven-jdk agent]
+                │  2. Build &     │  [maven-jdk agent]
+                │     Test        │  mvn clean verify
+                │  (compile +    │  JUnit 5 + JaCoCo
+                │   test + JAR)  │  stash JAR artifact
                 └────────┬────────┘
                          │
-              ┌──────────┴──────────┐
-              ▼                     ▼
-   ┌──────────────────┐  ┌──────────────────┐
-   │ 3a. Unit Tests   │  │ 3b. SonarQube    │  [PARALLEL]
-   │     + Coverage   │  │     Analysis     │
-   └────────┬─────────┘  └────────┬─────────┘
-              └──────────┬──────────┘
+                         ▼
+                ┌─────────────────┐
+                │ 3. SonarQube    │  [maven-jdk agent]
+                │    Analysis     │  (sequential, uses
+                │                 │   test coverage data)
+                └────────┬────────┘
+                         │
                          ▼
                 ┌─────────────────┐
                 │ 4. Quality Gate │  ← Fails if not met
@@ -124,36 +127,33 @@ External:
                          │
                          ▼
                 ┌─────────────────┐
-                │ 5. Package JAR  │
+                │ 5. Docker Build │  [docker-agent]
+                │    & Push       │  unstash JAR → build
+                │                 │  → Nexus Registry
                 └────────┬────────┘
                          │
                          ▼
                 ┌─────────────────┐
-                │ 6. Docker Build │  [docker-agent]
-                │    & Push       │  → Nexus Registry
+                │ 6. Trivy Scan   │  ← Fails on CRITICAL CVEs
+                │  (HTML + JSON)  │    HTML & JSON reports
                 └────────┬────────┘
                          │
                          ▼
                 ┌─────────────────┐
-                │ 7. Trivy Scan   │  ← Fails on CRITICAL CVEs
+                │ 7. Deploy to    │  [kubectl-agent]
+                │    Staging      │  (automatic + smoke test)
                 └────────┬────────┘
                          │
                          ▼
                 ┌─────────────────┐
-                │ 8. Deploy to    │  [kubectl-agent]
-                │    Staging      │  (automatic)
-                └────────┬────────┘
-                         │
-                         ▼
-                ┌─────────────────┐
-                │ 9. Manual       │  ← Human approval required
+                │ 8. Manual       │  ← Human approval required
                 │    Approval     │     (30 min timeout)
                 └────────┬────────┘
                          │
                          ▼
                 ┌─────────────────┐
-                │ 10. Blue-Green  │  [kubectl-agent]
-                │     Deploy      │  (zero-downtime)
+                │ 9. Blue-Green   │  [kubectl-agent]
+                │    Deploy       │  (zero-downtime)
                 └─────────────────┘
 ```
 
@@ -166,7 +166,7 @@ External:
 | **Dynamic Agent Provisioning** | Jenkins Kubernetes plugin creates ephemeral build agent pods on-demand |
 | **3 Pod Templates** | Maven/JDK (build/test), Docker/Trivy (image/scan), Kubectl (deploy) |
 | **Pipeline as Code** | Entire CI/CD process defined in a declarative `Jenkinsfile` |
-| **Parallel Stages** | Unit tests and SonarQube analysis run simultaneously |
+| **Optimized Build** | Single Maven pass compiles, tests, and packages; JAR stashed for Docker build |
 | **Quality Gates** | SonarQube quality gate fails the pipeline if not met |
 | **Security Scanning** | Trivy scans Docker images for CVEs; fails on CRITICAL |
 | **Artifact Repository** | Versioned Docker images pushed to Nexus registry |
@@ -293,39 +293,35 @@ git push origin main
 ### Stage 1: Checkout
 Clones the source code from the Git repository. Captures the short commit hash and message for tracking.
 
-### Stage 2: Build
-Compiles the Spring Boot application using Maven on the `maven-jdk` dynamic agent pod.
+### Stage 2: Build & Test
+Runs `mvn clean verify` in a single Maven invocation on the `maven-jdk` dynamic agent pod. This compiles the application, executes all JUnit 5 unit and integration tests with JaCoCo coverage, and packages the JAR — all in one pass. The resulting JAR is **stashed** for the Docker build stage and archived in Jenkins with fingerprinting.
 
-### Stage 3: Test & Analysis (Parallel)
-- **Unit & Integration Tests**: Runs all JUnit 5 tests with JaCoCo coverage reporting
-- **SonarQube Analysis**: Performs static code analysis against `localhost:9000`
+### Stage 3: SonarQube Analysis
+Performs static code analysis against the in-cluster SonarQube server. Runs **sequentially** after Build & Test to guarantee that test coverage data (`jacoco.exec`) is fully available. Uses the `maven-jdk` agent pod.
 
 ### Stage 4: Quality Gate
 Waits up to 10 minutes for SonarQube's quality gate result. **Fails the pipeline** if the quality gate is not met.
 
-### Stage 5: Package
-Packages the application into an executable JAR. Archives the artifact in Jenkins.
-
-### Stage 6: Image Build & Push
-Switches to the `docker-agent` pod template. Builds a multi-stage Docker image and pushes it to the Nexus Docker registry with version tags:
+### Stage 5: Image Build & Push
+Switches to the `docker-agent` pod template running Docker-in-Docker (DinD). **Unstashes** the pre-built JAR from Stage 2 and copies it into a lightweight runtime Docker image (no redundant compilation). Pushes to the Nexus Docker registry with version tags:
 - `<version>-<build_number>`
 - `latest`
 - `<git_commit_short>`
 
-### Stage 7: Security Scan
-Uses Trivy to scan the Docker image for vulnerabilities. Generates reports in both table and JSON format. **Fails the pipeline** if CRITICAL vulnerabilities are found.
+### Stage 6: Security Scan
+Uses Trivy to scan the Docker image for vulnerabilities. Generates reports in both **HTML** (styled template from ConfigMap) and **JSON** formats, both archived in Jenkins. **Fails the pipeline** if CRITICAL vulnerabilities are found.
 
-### Stage 8: Deploy to Staging
-Automatically deploys the new image to the staging environment using the `kubectl-agent`. Runs smoke tests to verify the deployment. Uses a **lock** to prevent concurrent deployments.
+### Stage 7: Deploy to Staging
+Automatically deploys the new image to the staging environment using the `kubectl-agent`. Waits for rollout completion, then runs smoke tests via `kubectl exec` directly inside the deployed container. Uses a **lock** to prevent concurrent deployments.
 
-### Stage 9: Manual Approval
+### Stage 8: Manual Approval
 Pauses the pipeline and waits for human approval (up to 30 minutes). Displays deployment information including version, commit, and image details.
 
-### Stage 10: Blue-Green Deploy
+### Stage 9: Blue-Green Deploy
 Performs a zero-downtime production deployment:
 1. Determines the current active color (blue/green)
 2. Deploys the new version to the idle color
-3. Runs smoke tests against the new deployment
+3. Runs smoke tests via `kubectl exec` against the new deployment
 4. Switches the service selector to the new color
 5. Keeps the old deployment for instant rollback
 
@@ -379,7 +375,7 @@ Dynamic-CI-CD-Pipeline/
 │
 ├── sample-app/                         # Spring Boot demo application
 │   ├── pom.xml                         # Maven build configuration
-│   ├── Dockerfile                      # Multi-stage Docker build
+│   ├── Dockerfile                      # Runtime Docker image (copies pre-built JAR)
 │   ├── .dockerignore                   # Docker build exclusions
 │   ├── sonar-project.properties        # SonarQube project config
 │   └── src/
