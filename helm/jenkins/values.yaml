@@ -50,28 +50,28 @@ controller:
 
   # Install plugins required for the pipeline
   installPlugins:
-    - kubernetes:4253.v7700d91739e5
-    - workflow-aggregator:600.vb_57cdd26fdd7
-    - git:5.2.2
-    - git-client:4.7.0
-    - configuration-as-code:1836.vccda_4a_122a_a_e
-    - job-dsl:1.87
-    - blueocean:1.27.14
-    - docker-workflow:572.v950f58993843
-    - pipeline-stage-view:2.34
-    - credentials-binding:677.vdc9c71ace0e0
-    - sonar:2.17.2
-    - pipeline-utility-steps:2.16.2
-    - timestamper:1.27
-    - ws-cleanup:0.45
-    - lockable-resources:1260.vb_d9cee705ccb_
-    - pipeline-graph-view:264.v2e3b_5e4763b_f
+    - kubernetes
+    - workflow-aggregator
+    - git
+    - git-client
+    - configuration-as-code
+    - job-dsl
+    - blueocean
+    - docker-workflow
+    - pipeline-stage-view
+    - credentials-binding
+    - sonar
+    - pipeline-utility-steps
+    - timestamper
+    - ws-cleanup
+    - lockable-resources
+    - pipeline-graph-view
 
   # Additional plugins (not in default list)
   additionalPlugins:
-    - antisamy-markup-formatter:162.v0e6ec0571b_67
-    - matrix-auth:3.2.2
-    - role-strategy:727.vd344b_eec783d
+    - antisamy-markup-formatter
+    - matrix-auth
+    - role-strategy
 
   # Jenkins Configuration as Code (JCasC)
   JCasC:
