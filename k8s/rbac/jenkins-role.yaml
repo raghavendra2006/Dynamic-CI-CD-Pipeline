@@ -70,8 +70,3 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
-
-  # Read namespaces
-  - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["get", "list"]

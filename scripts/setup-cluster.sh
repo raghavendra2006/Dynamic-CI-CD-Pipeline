@@ -98,7 +98,7 @@ apply_rbac() {
     kubectl apply -f "${PROJECT_DIR}/k8s/rbac/jenkins-role.yaml"
     kubectl apply -f "${PROJECT_DIR}/k8s/rbac/jenkins-rolebinding.yaml"
 
-    log_success "RBAC configured: ServiceAccount, Role, RoleBinding, ClusterRole, ClusterRoleBinding"
+    log_success "RBAC configured: ServiceAccount, Roles, and namespaced RoleBindings"
 }
 
 # Step 3: Deploy SonarQube

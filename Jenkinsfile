@@ -204,10 +204,6 @@ pipeline {
                 unstash 'app-jar'
                 container('docker') {
                     dir('sample-app') {
-                        // Start Docker daemon in background with insecure registry configuration
-                        sh 'dockerd --insecure-registry nexus-service.devops-tools.svc.cluster.local:8082 &'
-                        sh 'echo "Waiting for Docker daemon to start..." && for i in \$(seq 1 30); do docker info >/dev/null 2>&1 && break || sleep 1; done'
-
                         // Build the Docker image copying the pre-built JAR from the workspace
                         sh """
                             docker build \

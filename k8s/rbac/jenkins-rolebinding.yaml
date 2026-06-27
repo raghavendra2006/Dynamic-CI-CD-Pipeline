@@ -20,11 +20,31 @@ roleRef:
   name: jenkins-pod-manager
   apiGroup: rbac.authorization.k8s.io
 ---
-# ClusterRoleBinding for cross-namespace deployment capabilities
+# Namespaced RoleBinding for Staging namespace deployment capabilities
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: jenkins-deployer-binding
+  name: jenkins-deployer-staging-binding
+  namespace: staging
+  labels:
+    app.kubernetes.io/name: jenkins
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/part-of: dynamic-cicd-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: jenkins
+    namespace: jenkins
+roleRef:
+  kind: ClusterRole
+  name: jenkins-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+# Namespaced RoleBinding for Production namespace deployment capabilities
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jenkins-deployer-production-binding
+  namespace: production
   labels:
     app.kubernetes.io/name: jenkins
     app.kubernetes.io/component: rbac
